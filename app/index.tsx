@@ -30,6 +30,11 @@ export default function Home() {
           <Text style={styles.btnText}>My Dex</Text>
         </Pressable>
       </Link>
+      <Link href="/grow" asChild>
+        <Pressable style={styles.btn}>
+          <Text style={styles.btnText}>Grow & Feed</Text>
+        </Pressable>
+      </Link>
       <Link href="/battle" asChild>
         <Pressable style={styles.btn}>
           <Text style={styles.btnText}>Local Battle</Text>

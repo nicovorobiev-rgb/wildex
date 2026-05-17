@@ -1,10 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { simulate, type BattleResult } from '../lib/battle';
+import { ageLabel, effectiveStats, type Allocated } from '../lib/growth';
 import type { BattleStats } from '../lib/stats';
 import { supabase } from '../lib/supabase';
 
-type Capture = { id: string; common_name: string; stats: BattleStats };
+type Capture = {
+  id: string;
+  common_name: string;
+  stats: BattleStats;
+  age: number;
+  allocated: Allocated;
+};
 
 export default function Battle() {
   const [roster, setRoster] = useState<Capture[]>([]);
@@ -14,14 +21,19 @@ export default function Battle() {
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase.from('captures').select('id, common_name, stats').limit(20);
+      const { data } = await supabase
+        .from('captures')
+        .select('id, common_name, stats, age, allocated')
+        .limit(20);
       if (data) setRoster(data as Capture[]);
     })();
   }, []);
 
   function fight() {
     if (!a || !b) return;
-    setResult(simulate(a.stats, b.stats, `${a.id}:${b.id}:${Date.now()}`));
+    const sa = effectiveStats(a.stats, a.allocated);
+    const sb = effectiveStats(b.stats, b.allocated);
+    setResult(simulate(sa, sb, `${a.id}:${b.id}:${Date.now()}`));
   }
 
   return (
@@ -64,7 +76,7 @@ function Roster({
           onPress={() => onPick(c)}
         >
           <Text style={styles.chipName}>{c.common_name}</Text>
-          <Text style={styles.chipMeta}>{c.stats.element} · {c.stats.rarity}</Text>
+          <Text style={styles.chipMeta}>{ageLabel(c.age)} · {c.stats.element}</Text>
         </Pressable>
       ))}
     </ScrollView>
@@ -79,9 +91,7 @@ const styles = StyleSheet.create({
   chipPicked: { borderColor: '#7be39a' },
   chipName: { color: '#e7f5ec', fontWeight: '700' },
   chipMeta: { color: '#9fb9aa', fontSize: 11 },
-  fight: {
-    padding: 18, borderRadius: 12, backgroundColor: '#d33b3b', alignItems: 'center', marginTop: 16,
-  },
+  fight: { padding: 18, borderRadius: 12, backgroundColor: '#d33b3b', alignItems: 'center', marginTop: 16 },
   disabled: { opacity: 0.4 },
   fightText: { color: '#fff', fontWeight: '800', fontSize: 18, letterSpacing: 2 },
   result: { marginTop: 16, padding: 14, backgroundColor: '#0f2418', borderRadius: 12, gap: 4 },
