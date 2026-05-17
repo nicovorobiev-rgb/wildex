@@ -45,6 +45,11 @@ export default function Home() {
           <Text style={styles.btnText}>Online Challenges</Text>
         </Pressable>
       </Link>
+      <Link href="/shop" asChild>
+        <Pressable style={styles.btn}>
+          <Text style={styles.btnText}>Shop</Text>
+        </Pressable>
+      </Link>
 
       {email && (
         <Pressable onPress={async () => { await signOut(); router.replace('/sign-in'); }}>
