@@ -1,0 +1,34 @@
+{
+  "expo": {
+    "name": "Wildex",
+    "slug": "wildex",
+    "scheme": "wildex",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0b1d12"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.wildex.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Wildex uses the camera to photograph and identify wild animals.",
+        "NSPhotoLibraryUsageDescription": "Wildex needs access to save and select photos of animals you capture.",
+        "NSLocationWhenInUseUsageDescription": "Wildex tags captures with location to support regional dex entries."
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-camera",
+      "expo-location",
+      "expo-image-picker"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
