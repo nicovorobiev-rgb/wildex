@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { identifyAnimal, type IdSuggestion } from '../lib/inaturalist';
 import { rollStats } from '../lib/stats';
+import { uploadCaptureImage } from '../lib/storage';
 import { supabase } from '../lib/supabase';
 
 export default function Capture() {
@@ -49,6 +50,7 @@ export default function Capture() {
       if (user) {
         const captureId = `${user.id}-${Date.now()}`;
         const stats = rollStats(captureId, top);
+        const imageUrl = await uploadCaptureImage(photo.uri, captureId).catch(() => null);
         await supabase.from('captures').insert({
           id: captureId,
           user_id: user.id,
@@ -59,6 +61,7 @@ export default function Capture() {
           stats,
           lat: coords?.latitude ?? null,
           lng: coords?.longitude ?? null,
+          image_url: imageUrl,
         });
       }
     } finally {

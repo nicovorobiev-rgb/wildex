@@ -15,6 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.wildex.app",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Wildex uses the camera to photograph and identify wild animals.",
         "NSPhotoLibraryUsageDescription": "Wildex needs access to save and select photos of animals you capture.",
@@ -25,7 +26,8 @@
       "expo-router",
       "expo-camera",
       "expo-location",
-      "expo-image-picker"
+      "expo-image-picker",
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true
