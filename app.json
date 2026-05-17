@@ -27,8 +27,13 @@
       "expo-camera",
       "expo-location",
       "expo-image-picker",
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-asset"
     ],
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
     "experiments": {
       "typedRoutes": true
     }

@@ -1,27 +1,28 @@
 import { useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { PurchasesPackage } from 'react-native-purchases';
+import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getOfferings, purchase } from '../lib/iap';
 import { getInventory } from '../lib/growth';
 
 export default function Shop() {
-  const [packs, setPacks] = useState<PurchasesPackage[]>([]);
+  const [packs, setPacks] = useState<any[]>([]);
   const [inv, setInv] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
-    try { setPacks(await getOfferings()); } catch { /* not configured yet */ }
+    try { setPacks(await getOfferings()); } catch { /* not configured */ }
     setInv(await getInventory());
   }
   useEffect(() => { refresh(); }, []);
 
-  async function buy(p: PurchasesPackage) {
+  async function buy(p: any) {
     setBusy(true);
     try { await purchase(p); refresh(); }
     catch (e: any) {
       if (!e?.userCancelled) Alert.alert('Purchase failed', String(e.message ?? e));
     } finally { setBusy(false); }
   }
+
+  const isIOS = Platform.OS === 'ios';
 
   return (
     <View style={styles.root}>
@@ -30,9 +31,13 @@ export default function Shop() {
         <Text style={styles.invText}>Tonics: {inv.age_tonic ?? 0}</Text>
       </View>
 
-      {packs.length === 0 ? (
+      {!isIOS ? (
         <Text style={styles.notice}>
-          Shop not yet configured. Set EXPO_PUBLIC_RC_API_KEY and run on a device with App Store products active.
+          The Wildex shop runs on the iOS App Store. On the web preview, purchases are disabled — you'll see them when the iOS app launches.
+        </Text>
+      ) : packs.length === 0 ? (
+        <Text style={styles.notice}>
+          Shop not yet configured. Set EXPO_PUBLIC_RC_API_KEY and run on a real device with App Store products active.
         </Text>
       ) : (
         <FlatList
