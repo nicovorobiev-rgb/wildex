@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
@@ -13,13 +13,11 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
     if (this.state.error) {
       return (
         <ScrollView style={{ flex: 1, backgroundColor: '#0b1d12', padding: 20 }}>
-          <Text style={{ color: '#ff6b6b', fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>
-            App crashed
-          </Text>
-          <Text style={{ color: '#e7f5ec', fontFamily: 'monospace' }}>
+          <Text style={{ color: '#ff6b6b', fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>App crashed</Text>
+          <Text style={{ color: '#e7f5ec', fontFamily: 'monospace' as any }}>
             {String(this.state.error?.message ?? this.state.error)}
           </Text>
-          <Text style={{ color: '#9fb9aa', fontFamily: 'monospace', marginTop: 16, fontSize: 11 }}>
+          <Text style={{ color: '#9fb9aa', fontFamily: 'monospace' as any, marginTop: 16, fontSize: 11 }}>
             {String(this.state.error?.stack ?? '')}
           </Text>
         </ScrollView>
@@ -34,7 +32,7 @@ function GlobalErrorListener() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onErr = (e: ErrorEvent) => setErr(`${e.message}\n${e.filename}:${e.lineno}`);
-    const onRej = (e: PromiseRejectionEvent) => setErr(`Unhandled rejection: ${String(e.reason?.message ?? e.reason)}`);
+    const onRej = (e: PromiseRejectionEvent) => setErr(`Unhandled rejection: ${String((e.reason as any)?.message ?? e.reason)}`);
     window.addEventListener('error', onErr);
     window.addEventListener('unhandledrejection', onRej);
     return () => {
@@ -45,7 +43,7 @@ function GlobalErrorListener() {
   if (!err) return null;
   return (
     <View style={{ position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: '#7a1414', padding: 12, zIndex: 9999 }}>
-      <Text style={{ color: '#fff', fontFamily: 'monospace', fontSize: 11 }}>{err}</Text>
+      <Text style={{ color: '#fff', fontFamily: 'monospace' as any, fontSize: 11 }}>{err}</Text>
     </View>
   );
 }
@@ -53,15 +51,11 @@ function GlobalErrorListener() {
 export default function RootLayout() {
   return (
     <ErrorBoundary>
-      <StatusBar style="light" />
-      <GlobalErrorListener />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: '#0b1d12' },
-          headerTintColor: '#e7f5ec',
-          contentStyle: { backgroundColor: '#0b1d12' },
-        }}
-      />
+      <View style={{ flex: 1, backgroundColor: '#0b1d12' }}>
+        <StatusBar style="light" />
+        <GlobalErrorListener />
+        <Slot />
+      </View>
     </ErrorBoundary>
   );
 }
