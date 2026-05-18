@@ -19,6 +19,15 @@ export async function signInWithApple() {
   return data;
 }
 
+export async function signInWithGoogle() {
+  const redirectTo = typeof window !== 'undefined' ? window.location.origin : 'wildex://';
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo },
+  });
+  if (error) throw error;
+}
+
 export async function signInWithEmail(email: string) {
   const { error } = await supabase.auth.signInWithOtp({
     email,

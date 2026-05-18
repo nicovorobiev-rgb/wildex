@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { signInWithApple, signInWithEmail } from '../lib/auth';
+import { signInWithApple, signInWithEmail, signInWithGoogle } from '../lib/auth';
 
 export default function SignIn() {
   const [appleAvailable, setAppleAvailable] = useState(false);
@@ -44,6 +44,16 @@ export default function SignIn() {
         <Text style={styles.btnText}>{sent ? 'Check your email' : busy ? 'Sending…' : 'Send magic link'}</Text>
       </Pressable>
 
+      <Pressable
+        style={styles.googleBtn}
+        onPress={async () => {
+          try { await signInWithGoogle(); }
+          catch (e: any) { Alert.alert('Sign-in failed', String(e.message ?? e)); }
+        }}
+      >
+        <Text style={styles.googleText}>Continue with Google</Text>
+      </Pressable>
+
       {Platform.OS === 'ios' && appleAvailable && (
         <Pressable
           style={styles.appleBtn}
@@ -69,4 +79,6 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontWeight: '700' },
   appleBtn: { width: '100%', maxWidth: 360, backgroundColor: '#fff', padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 8 },
   appleText: { color: '#000', fontWeight: '700' },
+  googleBtn: { width: '100%', maxWidth: 360, backgroundColor: '#fff', padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 8, borderWidth: 1, borderColor: '#d0d0d0' },
+  googleText: { color: '#000', fontWeight: '700' },
 });
