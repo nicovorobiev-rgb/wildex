@@ -1,100 +1,332 @@
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { simulate, type BattleResult } from '../lib/battle';
-import { ageLabel, effectiveStats, type Allocated } from '../lib/growth';
-import type { BattleStats } from '../lib/stats';
-import { supabase } from '../lib/supabase';
+/**
+ * app/battle.tsx — Battle history index screen (Wildex v0.2)
+ *
+ * Shows the current user's battle history (win/loss record, opponent names,
+ * capture thumbnails, date). Tapping a row navigates to /battle/[id] for the
+ * full animated replay.
+ *
+ * CTA at top: "Challenge a Friend" → /challenge
+ *
+ * Spec refs:
+ *   spec/SPEC.md §4.6 (accept and resolve a battle)
+ *   spec/design-brief.md §6.4 (battle screen layout)
+ *   spec/architecture.md §9 (dependency direction rules)
+ *
+ * Data:  useBattleHistory()  — hooks/useBattles.ts
+ * Route: /battle/[id]        — app/battle/[id].tsx (replay screen)
+ */
 
-type Capture = {
-  id: string;
-  common_name: string;
-  stats: BattleStats;
-  age: number;
-  allocated: Allocated;
-};
+import React from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useRouter } from 'expo-router';
 
-export default function Battle() {
-  const [roster, setRoster] = useState<Capture[]>([]);
-  const [a, setA] = useState<Capture | null>(null);
-  const [b, setB] = useState<Capture | null>(null);
-  const [result, setResult] = useState<BattleResult | null>(null);
+import Screen from '@/components/Screen';
+import Card from '@/components/Card';
+import { colors, space, typography, radius } from '@/components/theme';
+import { useBattleHistory } from '@/hooks/useBattles';
+import { useAuth } from '@/lib/AuthContext';
+import type { Battle } from '@/engine/types';
 
-  useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from('captures')
-        .select('id, common_name, stats, age, allocated')
-        .limit(20);
-      if (data) setRoster(data as Capture[]);
-    })();
-  }, []);
+// ---------------------------------------------------------------------------
+// Win/loss record derived from battle history
+// ---------------------------------------------------------------------------
 
-  function fight() {
-    if (!a || !b) return;
-    const sa = effectiveStats(a.stats, a.allocated);
-    const sb = effectiveStats(b.stats, b.allocated);
-    setResult(simulate(sa, sb, `${a.id}:${b.id}:${Date.now()}`));
+function computeRecord(battles: Battle[], userId: string): { wins: number; losses: number } {
+  let wins = 0;
+  let losses = 0;
+  for (const b of battles) {
+    const isPlayerA = b.player_a === userId;
+    const won = (isPlayerA && b.winner === 'a') || (!isPlayerA && b.winner === 'b');
+    if (won) wins++;
+    else losses++;
+  }
+  return { wins, losses };
+}
+
+// ---------------------------------------------------------------------------
+// Date formatting — relative within 24 h, absolute beyond
+// ---------------------------------------------------------------------------
+
+function formatDate(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return 'yesterday';
+  return `${days}d ago`;
+}
+
+// ---------------------------------------------------------------------------
+// BattleRow — single history list item
+// ---------------------------------------------------------------------------
+
+interface BattleRowProps {
+  battle: Battle;
+  userId: string;
+  onPress: () => void;
+}
+
+function BattleRow({ battle, userId, onPress }: BattleRowProps): React.ReactElement {
+  const isPlayerA = battle.player_a === userId;
+  const won = (isPlayerA && battle.winner === 'a') || (!isPlayerA && battle.winner === 'b');
+  const opponentId = isPlayerA ? battle.player_b : battle.player_a;
+
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel="View battle replay">
+      <Card variant="surface" padding={4}>
+        <View style={styles.rowInner}>
+          {/* Left: W/L badge */}
+          <View style={[styles.badge, won ? styles.badgeWin : styles.badgeLoss]}>
+            <Text style={styles.badgeText}>{won ? 'W' : 'L'}</Text>
+          </View>
+
+          {/* Middle: opponent + capture slugs */}
+          <View style={styles.rowMeta}>
+            <Text style={styles.opponentId} numberOfLines={1}>
+              {opponentId.slice(0, 8)}
+            </Text>
+            <Text style={styles.captureIds} numberOfLines={1}>
+              {battle.capture_a.slice(0, 6)} vs {battle.capture_b.slice(0, 6)}
+            </Text>
+          </View>
+
+          {/* Right: date + chevron */}
+          <View style={styles.rowRight}>
+            <Text style={styles.date}>{formatDate(battle.created_at)}</Text>
+            <Text style={styles.chevron}>{'›'}</Text>
+          </View>
+        </View>
+      </Card>
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// EmptyState — shown when history list is empty
+// ---------------------------------------------------------------------------
+
+function EmptyState(): React.ReactElement {
+  return (
+    <View style={styles.emptyContainer}>
+      <Text style={styles.emptyTitle}>No battles yet.</Text>
+      <Text style={styles.emptyBody}>Send your first challenge!</Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// BattleScreen — default export
+// ---------------------------------------------------------------------------
+
+export default function BattleScreen(): React.ReactElement {
+  const router = useRouter();
+  const { user } = useAuth();
+  const { data: battles, isLoading, isError, error } = useBattleHistory();
+
+  const record = battles && user
+    ? computeRecord(battles, user.id)
+    : null;
+
+  function handleChallengePress(): void {
+    router.push('/challenge');
+  }
+
+  function handleRowPress(id: string): void {
+    router.push(`/battle/${id}` as const);
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.root}>
-      <Text style={styles.title}>Pick your fighter</Text>
-      <Roster items={roster} picked={a} onPick={setA} />
-      <Text style={styles.title}>Pick opponent</Text>
-      <Roster items={roster} picked={b} onPick={setB} />
+    <Screen scroll={false} padded>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Battles</Text>
+        {record && (
+          <Text style={styles.record}>
+            {record.wins}W — {record.losses}L
+          </Text>
+        )}
+      </View>
 
-      <Pressable style={[styles.fight, (!a || !b) && styles.disabled]} onPress={fight} disabled={!a || !b}>
-        <Text style={styles.fightText}>FIGHT</Text>
+      {/* CTA */}
+      <Pressable
+        style={styles.ctaButton}
+        onPress={handleChallengePress}
+        accessibilityRole="button"
+        accessibilityLabel="Challenge a friend"
+      >
+        <Text style={styles.ctaText}>Challenge a Friend</Text>
       </Pressable>
 
-      {result && (
-        <View style={styles.result}>
-          <Text style={styles.winner}>
-            Winner: {result.winner === 'a' ? a?.common_name : b?.common_name}
-          </Text>
-          {result.log.slice(-10).map((l, i) => (
-            <Text key={i} style={styles.logLine}>
-              T{l.turn} — {l.attacker === 'a' ? a?.common_name : b?.common_name} hit for {l.damage}
-              {l.crit ? ' (crit!)' : ''}
-            </Text>
-          ))}
+      {/* Loading */}
+      {isLoading && (
+        <View style={styles.centeredFeedback}>
+          <ActivityIndicator size="large" color={colors.brand.primary} />
+          <Text style={styles.feedbackText}>Loading battles…</Text>
         </View>
       )}
-    </ScrollView>
+
+      {/* Error */}
+      {isError && !isLoading && (
+        <View style={styles.centeredFeedback}>
+          <Text style={styles.errorText}>
+            {error instanceof Error ? error.message : 'Failed to load battles.'}
+          </Text>
+        </View>
+      )}
+
+      {/* List */}
+      {!isLoading && !isError && (
+        <FlatList
+          data={battles ?? []}
+          keyExtractor={(b) => b.id}
+          contentContainerStyle={styles.list}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListEmptyComponent={<EmptyState />}
+          renderItem={({ item }) => (
+            <BattleRow
+              battle={item}
+              userId={user?.id ?? ''}
+              onPress={() => handleRowPress(item.id)}
+            />
+          )}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </Screen>
   );
 }
 
-function Roster({
-  items, picked, onPick,
-}: { items: Capture[]; picked: Capture | null; onPick: (c: Capture) => void }) {
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.roster}>
-      {items.map((c) => (
-        <Pressable
-          key={c.id}
-          style={[styles.chip, picked?.id === c.id && styles.chipPicked]}
-          onPress={() => onPick(c)}
-        >
-          <Text style={styles.chipName}>{c.common_name}</Text>
-          <Text style={styles.chipMeta}>{ageLabel(c.age)} · {c.stats.element}</Text>
-        </Pressable>
-      ))}
-    </ScrollView>
-  );
-}
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  root: { padding: 16, gap: 12 },
-  title: { color: '#7be39a', fontWeight: '700', fontSize: 16, marginTop: 8 },
-  roster: { gap: 8, paddingVertical: 4 },
-  chip: { padding: 10, backgroundColor: '#16321f', borderRadius: 10, borderWidth: 2, borderColor: 'transparent' },
-  chipPicked: { borderColor: '#7be39a' },
-  chipName: { color: '#e7f5ec', fontWeight: '700' },
-  chipMeta: { color: '#9fb9aa', fontSize: 11 },
-  fight: { padding: 18, borderRadius: 12, backgroundColor: '#d33b3b', alignItems: 'center', marginTop: 16 },
-  disabled: { opacity: 0.4 },
-  fightText: { color: '#fff', fontWeight: '800', fontSize: 18, letterSpacing: 2 },
-  result: { marginTop: 16, padding: 14, backgroundColor: '#0f2418', borderRadius: 12, gap: 4 },
-  winner: { color: '#7be39a', fontWeight: '800', fontSize: 18, marginBottom: 8 },
-  logLine: { color: '#9fb9aa', fontSize: 12 },
+  header: {
+    marginBottom: space[4],
+  },
+  title: {
+    fontSize: typography.size.xl,
+    fontWeight: typography.weight.heavy,
+    color: colors.text.primary,
+    lineHeight: typography.size.xl * typography.leading.tight,
+  },
+  record: {
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.medium,
+    color: colors.text.secondary,
+    marginTop: space[1],
+  },
+  ctaButton: {
+    backgroundColor: colors.brand.primary,
+    borderRadius: radius.md,
+    paddingVertical: space[3],
+    paddingHorizontal: space[4],
+    alignItems: 'center',
+    marginBottom: space[6],
+  },
+  ctaText: {
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.bold,
+    color: colors.text.inverse,
+  },
+  list: {
+    gap: space[2],
+    paddingBottom: space[8],
+  },
+  separator: {
+    height: space[2],
+  },
+  rowInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[3],
+  },
+  badge: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeWin: {
+    backgroundColor: colors.status.success,
+  },
+  badgeLoss: {
+    backgroundColor: colors.status.error,
+  },
+  badgeText: {
+    fontSize: typography.size.sm,
+    fontWeight: typography.weight.heavy,
+    color: colors.text.inverse,
+  },
+  rowMeta: {
+    flex: 1,
+    gap: 2,
+  },
+  opponentId: {
+    fontSize: typography.size.base,
+    fontWeight: typography.weight.bold,
+    color: colors.text.primary,
+  },
+  captureIds: {
+    fontSize: typography.size.xs,
+    color: colors.text.muted,
+    fontFamily: 'ui-monospace',
+  },
+  rowRight: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  date: {
+    fontSize: typography.size.xs,
+    color: colors.text.secondary,
+  },
+  chevron: {
+    fontSize: typography.size.lg,
+    color: colors.text.muted,
+  },
+  centeredFeedback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space[3],
+  },
+  feedbackText: {
+    fontSize: typography.size.sm,
+    color: colors.text.secondary,
+  },
+  errorText: {
+    fontSize: typography.size.sm,
+    color: colors.status.error,
+    textAlign: 'center',
+    paddingHorizontal: space[6],
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: space[12],
+    gap: space[2],
+  },
+  emptyTitle: {
+    fontSize: typography.size.lg,
+    fontWeight: typography.weight.bold,
+    color: colors.text.primary,
+    lineHeight: typography.size.lg * typography.leading.loose,
+  },
+  emptyBody: {
+    fontSize: typography.size.base,
+    color: colors.text.secondary,
+    lineHeight: typography.size.base * typography.leading.loose,
+  },
 });

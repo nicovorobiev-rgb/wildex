@@ -27,12 +27,20 @@ export async function identifyAnimal(imageUri: string, token?: string): Promise<
   if (!res.ok) throw new Error(`iNaturalist ${res.status}`);
   const json = await res.json();
 
-  return (json.results ?? []).slice(0, 5).map((r: any) => ({
-    taxonId: r.taxon.id,
-    commonName: r.taxon.preferred_common_name ?? r.taxon.name,
-    scientificName: r.taxon.name,
-    rank: r.taxon.rank,
-    score: r.combined_score,
-    iconicTaxon: r.taxon.iconic_taxon_name ?? null,
-  }));
+  type INatTaxon = { id: number; name: string; preferred_common_name?: string; rank: string; iconic_taxon_name?: string };
+  type INatRawResult = { taxon?: INatTaxon | null; combined_score: number };
+  // iNat occasionally returns taxon: null for unranked results. The old
+  // any-typed mapper crashed on r.taxon.id; we filter then map (audit M15).
+  return (json.results ?? [])
+    .filter((x: INatRawResult): x is INatRawResult & { taxon: INatTaxon } => x.taxon != null)
+    .slice(0, 5)
+    .map((x: INatRawResult & { taxon: INatTaxon }) => ({
+      taxonId: x.taxon.id,
+      commonName: x.taxon.preferred_common_name ?? x.taxon.name,
+      scientificName: x.taxon.name,
+      rank: x.taxon.rank,
+      // iNat returns combined_score on a 0-100 scale; downstream code expects 0-1.
+      score: x.combined_score / 100,
+      iconicTaxon: x.taxon.iconic_taxon_name ?? null,
+    }));
 }

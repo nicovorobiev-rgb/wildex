@@ -3,6 +3,7 @@
 // Same taxon + same capture id -> same stats (no rerolls).
 
 import type { IdSuggestion } from './inaturalist';
+import { rng } from './rng';
 
 export type BattleStats = {
   hp: number;
@@ -30,16 +31,6 @@ const ELEMENT_MAP: Record<string, Element> = {
   Fungi: 'fungal',
 };
 
-// Deterministic PRNG seeded by capture id.
-function rng(seed: string) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) h = (h ^ seed.charCodeAt(i)) * 16777619;
-  return () => {
-    h = (h * 1664525 + 1013904223) >>> 0;
-    return h / 0xffffffff;
-  };
-}
-
 function rarityFromScore(score: number): Rarity {
   if (score > 0.97) return 'legendary';
   if (score > 0.9) return 'epic';
@@ -58,7 +49,10 @@ const RARITY_BUDGET: Record<Rarity, number> = {
 
 export function rollStats(captureId: string, top: IdSuggestion): BattleStats {
   const element = ELEMENT_MAP[top.iconicTaxon ?? ''] ?? 'unknown';
-  const rarity = rarityFromScore(top.score);
+  // Clamp score into [0,1]; iNat is supposed to give us 0-1 (after the /100 normalization
+  // in inaturalist.ts), but a NaN/negative/missing value would silently poison every stat.
+  const score = Math.max(0, Math.min(1, Number(top.score) || 0));
+  const rarity = rarityFromScore(score);
   const budget = RARITY_BUDGET[rarity];
   const r = rng(captureId);
 

@@ -8,3 +8,8 @@ ios/
 android/
 .DS_Store
 .vercel
+
+# Ruflo / Claude session sidecars — NOT project state
+ruvector.db
+.claude-flow/
+.claude/

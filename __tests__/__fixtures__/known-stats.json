@@ -1,0 +1,15 @@
+{
+  "captureId": "legend-test",
+  "taxonId": 1,
+  "iconicTaxon": "Aves",
+  "score": 0.99,
+  "expected": {
+    "hp": 81,
+    "attack": 101,
+    "defense": 101,
+    "speed": 162,
+    "special": 95,
+    "element": "avian",
+    "rarity": "legendary"
+  }
+}

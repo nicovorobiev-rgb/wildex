@@ -19,10 +19,14 @@ export default function Grow() {
   const [inv, setInv] = useState<Record<string, number>>({});
 
   async function refresh() {
-    const { data } = await supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data, error } = await supabase
       .from('captures')
       .select('id, common_name, stats, xp, age, pending_points, allocated')
+      .eq('user_id', user.id)         // defense-in-depth (audit H-sec-6)
       .order('created_at', { ascending: false });
+    if (error) console.error('[grow] fetch failed:', error.message);
     if (data) setItems(data as Capture[]);
     setInv(await getInventory());
   }

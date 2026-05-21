@@ -3,6 +3,7 @@
 // be re-simulated server-side for anti-cheat.
 
 import type { BattleStats, Element } from './stats';
+import { rng } from './rng';
 
 export type BattleLog = { turn: number; attacker: 'a' | 'b'; damage: number; crit: boolean }[];
 export type BattleResult = { winner: 'a' | 'b'; log: BattleLog };
@@ -17,15 +18,6 @@ const TYPE_CHART: Record<Element, Partial<Record<Element, number>>> = {
   fungal: { flora: 1.3, insect: 0.8, beast: 1.1 },
   unknown: {},
 };
-
-function rng(seed: string) {
-  let h = 2166136261;
-  for (let i = 0; i < seed.length; i++) h = (h ^ seed.charCodeAt(i)) * 16777619;
-  return () => {
-    h = (h * 1664525 + 1013904223) >>> 0;
-    return h / 0xffffffff;
-  };
-}
 
 function damage(att: BattleStats, def: BattleStats, r: number): { dmg: number; crit: boolean } {
   const crit = r < 0.08;
@@ -56,5 +48,13 @@ export function simulate(a: BattleStats, b: BattleStats, seed: string): BattleRe
     }
   }
 
-  return { winner: hpA > hpB ? 'a' : 'b', log };
+  // Explicit tie-break — was implicitly 'b' on equal HP (audit Code-5).
+  // Falls through stat ladder, ending in a deterministic PRNG draw.
+  let winner: 'a' | 'b';
+  if      (hpA !== hpB)           winner = hpA > hpB ? 'a' : 'b';
+  else if (a.attack  !== b.attack)  winner = a.attack  > b.attack  ? 'a' : 'b';
+  else if (a.speed   !== b.speed)   winner = a.speed   > b.speed   ? 'a' : 'b';
+  else if (a.defense !== b.defense) winner = a.defense > b.defense ? 'a' : 'b';
+  else                              winner = r() < 0.5 ? 'a' : 'b';
+  return { winner, log };
 }

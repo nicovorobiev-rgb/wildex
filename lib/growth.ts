@@ -27,7 +27,10 @@ export const STAT_LABEL: Record<Stat, string> = {
 // 1→2: 60, 2→3: 148, 3→4: 250, ..., 9→10: 1062. Total ~4667 XP across all
 // age-ups. With daily feeds + battle wins, ~3 weeks of casual play to max.
 export function xpToNextAge(currentAge: number): number {
-  return Math.round(60 * Math.pow(currentAge, 1.3));
+  // Guard age=0: 60 * 0^1.3 = 0 → divide-by-zero on the XP bar (audit H-code-10).
+  // The schema migration defaults age=1 with a check constraint; this is
+  // belt-and-suspenders for any pre-migration rows.
+  return Math.round(60 * Math.pow(Math.max(1, currentAge), 1.3));
 }
 
 export function ageLabel(age: number): string {

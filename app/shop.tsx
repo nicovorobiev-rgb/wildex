@@ -1,20 +1,31 @@
 import { useEffect, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { PurchasesPackage } from 'react-native-purchases';
 import { getOfferings, purchase } from '../lib/iap';
 import { getInventory } from '../lib/growth';
 
 export default function Shop() {
-  const [packs, setPacks] = useState<any[]>([]);
+  const [packs, setPacks] = useState<PurchasesPackage[]>([]);  // audit M17
   const [inv, setInv] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
-    try { setPacks(await getOfferings()); } catch { /* not configured */ }
+    // Audit M16 — was silently swallowed; differentiate "not configured" from
+    // real errors so debugging during release isn't blind.
+    try {
+      setPacks(await getOfferings());
+    } catch (e: any) {
+      if (!process.env.EXPO_PUBLIC_RC_API_KEY) {
+        console.warn('[shop] EXPO_PUBLIC_RC_API_KEY not set — shop is offline');
+      } else {
+        console.error('[shop] getOfferings failed:', e?.message ?? e);
+      }
+    }
     setInv(await getInventory());
   }
   useEffect(() => { refresh(); }, []);
 
-  async function buy(p: any) {
+  async function buy(p: PurchasesPackage) {
     setBusy(true);
     try { await purchase(p); refresh(); }
     catch (e: any) {

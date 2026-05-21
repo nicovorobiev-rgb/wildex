@@ -1,0 +1,242 @@
+// engine/types.ts — canonical Wildex v0.2 type definitions.
+// SINGLE source of truth. Every other file in the repo imports from here.
+// Zero imports — this file has no dependencies.
+//
+// Spec refs:
+//   spec/architecture.md §4 (Engine sharing strategy, Capture excerpt)
+//   spec/data-model.md §7   (Single canonical Capture type — FROZEN for v0.2)
+//   spec/data-model.md §1   (Entity diagram — Challenge, Battle, Friend, FriendRequest)
+//   spec/data-model.md §2.3 (battles table), §2.4 (challenges table)
+//   spec/data-model.md §2.5 (friendships table)
+
+// ---------------------------------------------------------------------------
+// Battle primitives
+// ---------------------------------------------------------------------------
+
+export type Element =
+  | 'beast'
+  | 'avian'
+  | 'aquatic'
+  | 'reptile'
+  | 'insect'
+  | 'flora'
+  | 'fungal'
+  | 'unknown';
+
+export type Rarity = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary';
+
+export type BattleStats = {
+  /** Capture id this stat block belongs to. Required for deterministic battle seeding. */
+  id: string;
+  hp: number;
+  attack: number;
+  defense: number;
+  speed: number;
+  special: number;
+  element: Element;
+  rarity: Rarity;
+};
+
+/** A single turn in a battle log. */
+export type Turn = {
+  turn: number;
+  attacker: 'a' | 'b';
+  damage: number;
+  crit: boolean;
+};
+
+export type BattleLog = Turn[];
+
+export type BattleResult = {
+  winner: 'a' | 'b';
+  log: BattleLog;
+};
+
+// ---------------------------------------------------------------------------
+// Capture — mirrors the `captures` table after the v0.2 migration.
+// data-model.md §7 is the authoritative definition (frozen for v0.2 build).
+// ---------------------------------------------------------------------------
+
+/** The five allocatable stat keys. */
+export type StatKey = 'hp' | 'attack' | 'defense' | 'speed' | 'special';
+
+/**
+ * Backward-compatible alias. data-model.md calls this `Stat`;
+ * architecture.md uses `StatKey` in `allocated: Partial<Record<StatKey, number>>`.
+ * Both names are exported so import sites can use either.
+ */
+export type Stat = StatKey;
+
+export type Allocated = Partial<Record<StatKey, number>>;
+
+/**
+ * Canonical Capture row shape. Mirrors the `captures` table after v0.2.
+ * Generated DB types (Supabase CLI) are the long-term source of truth;
+ * this hand-rolled type is the v0.2 bridge.
+ */
+export type Capture = {
+  /** Server-issued UUIDv4 string. */
+  id: string;
+  /** auth.users.id (UUID). */
+  user_id: string;
+  /** iNaturalist taxon_id. Positive integer < 1e9. */
+  taxon_id: number;
+  common_name: string;
+  scientific_name: string;
+  /** Observation confidence score in [0, 1]. */
+  score: number;
+  /** Deterministic battle stats derived from taxon + score + captureId. */
+  stats: BattleStats;
+  /** Total accumulated experience points. >= 0. */
+  xp: number;
+  /** Current growth age in [1, 10]. */
+  age: number;
+  /** Unspent stat allocation points. >= 0. */
+  pending_points: number;
+  /** Player-allocated bonus points per stat. Default {}. */
+  allocated: Allocated;
+  /** GPS latitude at capture time. Nullable. */
+  lat: number | null;
+  /** GPS longitude at capture time. Nullable. */
+  lng: number | null;
+  /**
+   * Supabase Storage path under the "captures" bucket.
+   * Format: `${user_id}/${capture_id}.jpg`
+   * Call signCaptureUrl(image_path) to get a short-TTL signed URL for display.
+   * RENAMED from image_url in v0.2 (spec/data-model.md §2.2).
+   */
+  image_path: string | null;
+  /** ISO 8601 timestamp. */
+  created_at: string;
+};
+
+export type CaptureSelect = keyof Capture;
+
+// ---------------------------------------------------------------------------
+// Challenge — mirrors the `challenges` table (spec/data-model.md §2.4 + §1).
+//
+// Spec contradiction vs. services/battles.ts:
+//   - services/battles.ts names the column `challenger_capture` (matching
+//     schema.sql FK column name). The spec entity diagram (§1) also uses
+//     `challenger_capture`. Both agree — `challenger_capture` it is.
+//   - `challenger_stats` / `opponent_stats` are JSONB columns in the DB
+//     (written server-side). Typed as `Record<string, unknown> | null` here
+//     since the engine must not depend on BattleStats (the DB JSONB is not
+//     validated at the type level; validation happens at service boundaries).
+//   - `winner` is `'a' | 'b' | null` per spec §2.4 (NULL until resolved).
+//   - `resolved_at` is a new column added in v0.2 migration Phase A §4.
+// ---------------------------------------------------------------------------
+
+/**
+ * Row shape for the `challenges` table.
+ * spec/data-model.md §2.4 + §1 entity diagram.
+ *
+ * `seed`, `winner`, `opponent_id`, `opponent_capture`, `opponent_stats` are
+ * NULL until the challenge is accepted. `resolved_at` is NULL until the
+ * accept-challenge Edge Function resolves it.
+ */
+export type Challenge = {
+  id: string;
+  /** 8-char shareable join code (unique). */
+  code: string;
+  /** auth.users.id of the user who created the challenge. */
+  challenger_id: string;
+  /** captures.id of the challenger's chosen capture. */
+  challenger_capture: string;
+  /** JSONB stat snapshot; NULL until accepted (written server-side). */
+  challenger_stats: Record<string, unknown> | null;
+  /** auth.users.id of the opponent; NULL until accepted. */
+  opponent_id: string | null;
+  /** captures.id of the opponent's chosen capture; NULL until accepted. */
+  opponent_capture: string | null;
+  /** JSONB stat snapshot; NULL until accepted (written server-side). */
+  opponent_stats: Record<string, unknown> | null;
+  /** Deterministic seed string used for the battle sim; NULL until accepted. */
+  seed: string | null;
+  /** Battle outcome; NULL until resolved. 'a' = challenger won, 'b' = opponent. */
+  winner: 'a' | 'b' | null;
+  /** ISO 8601 timestamp; NULL until accept-challenge Edge Fn runs. */
+  resolved_at: string | null;
+  /** ISO 8601 timestamp when the challenge row was created. */
+  created_at: string;
+};
+
+// ---------------------------------------------------------------------------
+// Battle — mirrors the `battles` table (spec/data-model.md §2.3 + §1).
+//
+// spec §1 entity diagram column names: player_a, player_b, capture_a,
+// capture_b, seed, winner. These match schema.sql:32-41 and services/battles.ts.
+// No `log` column on battles — the Edge Function writes log to challenges.
+// ---------------------------------------------------------------------------
+
+/**
+ * Row shape for the `battles` table.
+ * spec/data-model.md §2.3 + §1 entity diagram.
+ *
+ * Written exclusively by the accept-challenge Edge Function via service role.
+ * `log` lives on the `challenges` row; `battles` records the authoritative
+ * outcome reference only (spec/data-model.md §9 open question #4).
+ */
+export type Battle = {
+  id: string;
+  /** auth.users.id of the challenger (side 'a'). */
+  player_a: string;
+  /** auth.users.id of the opponent (side 'b'). */
+  player_b: string;
+  /** captures.id used by player_a. */
+  capture_a: string;
+  /** captures.id used by player_b. */
+  capture_b: string;
+  /** Deterministic seed string used for the sim replay. */
+  seed: string;
+  /** Who won: 'a' (challenger) or 'b' (opponent). */
+  winner: 'a' | 'b';
+  /** ISO 8601 timestamp. */
+  created_at: string;
+};
+
+// ---------------------------------------------------------------------------
+// Friend — enriched view of an accepted friendship row joined with profile.
+// Shape matches services/friends.ts which the spec (§2.5) informs.
+//
+// Note: the friendships table has `accepted_at` (not `created_at`) as the
+// field that records when a pending row was promoted to accepted. `created_at`
+// records when the pending row was first inserted. Both are surfaced here
+// because callers may want to display "friends since" (accepted_at).
+// ---------------------------------------------------------------------------
+
+/**
+ * A fully-accepted friend, enriched with profile display fields.
+ * Represents one direction of a symmetric accepted friendship row, joined
+ * with the friend's `profiles` row for display purposes.
+ */
+export type Friend = {
+  /** auth.users.id of the friend. */
+  user_id: string;
+  display_name: string | null;
+  /** The friend's 8-char code (from their profiles row). */
+  friend_code: string;
+  /** When the friendship was accepted (ISO 8601); NULL for legacy rows. */
+  accepted_at: string | null;
+};
+
+// ---------------------------------------------------------------------------
+// FriendRequest — a pending friendship row joined with the requester's profile.
+// ---------------------------------------------------------------------------
+
+/**
+ * A pending friendship request (one direction), enriched with the requester's
+ * profile fields for display. `status` is always 'pending' by definition.
+ */
+export type FriendRequest = {
+  /** auth.users.id of the user who sent the request. */
+  requester_id: string;
+  /** Display name from the requester's profiles row; may be null. */
+  requester_display_name: string | null;
+  /** Friend code from the requester's profiles row. */
+  requester_friend_code: string;
+  /** auth.users.id of the user who received the request. */
+  target_id: string;
+  /** ISO 8601 timestamp when the pending row was created. */
+  created_at: string;
+};
