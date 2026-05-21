@@ -31,6 +31,19 @@
 
 begin;
 
+-- DIAGNOSTIC: report which tables exist so we can debug the "battles missing" error.
+do $$
+declare
+  has_battles boolean;
+  has_challenges boolean;
+  has_inventory boolean;
+begin
+  select exists (select 1 from information_schema.tables where table_schema='public' and table_name='battles') into has_battles;
+  select exists (select 1 from information_schema.tables where table_schema='public' and table_name='challenges') into has_challenges;
+  select exists (select 1 from information_schema.tables where table_schema='public' and table_name='inventory') into has_inventory;
+  raise notice 'PRE-LOCKDOWN TABLE STATE: battles=%, challenges=%, inventory=%', has_battles, has_challenges, has_inventory;
+end $$;
+
 -- -----------------------------------------------------------------------------
 -- STEP 1 — audit H-sec-2: revoke client INSERT on captures.
 -- -----------------------------------------------------------------------------

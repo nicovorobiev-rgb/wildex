@@ -95,6 +95,12 @@ grant execute on function public.accept_friendship(uuid, uuid) to service_role;
 -- -----------------------------------------------------------------------------
 -- STEP 2 — increment_inventory RPC.
 -- -----------------------------------------------------------------------------
+-- Pre-step: ensure the inventory.updated_at column exists. Some prod environments
+-- have an older inventory table without it (created via dashboard before the
+-- v0.1 schema.sql evolution added it).
+alter table public.inventory
+  add column if not exists updated_at timestamptz not null default now();
+
 -- Additive upsert into inventory keyed by (user_id, item). On a fresh row,
 -- quantity := p_qty. On an existing row, quantity := quantity + p_qty (NOT
 -- := p_qty — that was the bug in the webhook's fallback path that silently
